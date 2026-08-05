@@ -14,7 +14,8 @@ saved favorites — a close clone of Transit's look and feel.
   real time (updates ~every 15s).
 - **Trip planner** — enter a destination, get real route options with times and transfers.
 - **Favorites** — star regular stops and routes; pinned at the top and saved between visits.
-- **Service alerts** — banners when there's a disruption.
+- ~~**Service alerts** — banners when there's a disruption.~~ Not possible: OC Transpo does
+  not publish a GTFS-Realtime Alerts feed (see [Data sources](#data-sources)).
 
 ## What the finished product looks like
 
@@ -38,13 +39,32 @@ A phone-shaped, dark, app-like web page:
 | Data | Source | Key needed? | Used for |
 |------|--------|-------------|----------|
 | **GTFS static** (routes, stops, schedules, line shapes) | [Open Ottawa](https://open.ottawa.ca/search?tags=gtfs) — downloadable `.zip` | No | Route list, stop locations, drawing lines on the map, scheduled times |
-| **GTFS-Realtime — VehiclePositions** | OC Transpo [developer portal](https://www.octranspo.com/en/plan-your-trip/travel-tools/developers/) (Azure) | **Yes (free)** | Live bus/train dots moving on the map |
+| **GTFS-Realtime — VehiclePositions** | OC Transpo [developer portal](https://nextrip-public-api.developer.azure-api.net/) (Azure) | **Yes (free)** | Live bus/train dots moving on the map |
 | **GTFS-Realtime — TripUpdates** | Same portal | **Yes (free)** | Real countdown timers (predicted arrivals vs. schedule) |
-| **GTFS-Realtime — Alerts** | Same portal | **Yes (free)** | Service disruption banners |
+| ~~GTFS-Realtime — Alerts~~ | — | — | **Not published by OC Transpo** — see below |
 
 > **One-time action:** register at OC Transpo's developer portal for a free API key. It's
 > stored in a git-ignored `.env` file, never committed. The old stop-based "API 2.0" was
 > retired in April 2025; GTFS-Realtime is the current path.
+
+### Realtime feed endpoints
+
+The portal publishes two products only — **Vehicle Positions** and **Trip Updates**. There
+is **no Alerts feed**; anything in this repo about service-alert banners is unbuildable
+until OC Transpo adds one. `/api/alerts` returns an empty array so the frontend contract
+holds if that changes.
+
+Both take the key as an `Ocp-Apim-Subscription-Key` header and accept
+`?format=protobuf` or `?format=json`:
+
+```
+https://nextrip-public-api.azure-api.net/octranspo/gtfs-rt-vp/beta/v1/VehiclePositions
+https://nextrip-public-api.azure-api.net/octranspo/gtfs-rt-tp/beta/v1/TripUpdates
+```
+
+Note the TripUpdates path segment is `gtfs-rt-tp`, not the `-tu` the naming pattern
+suggests. The feeds refresh about every 40 seconds, so polling faster than that returns
+identical data.
 
 ## Architecture
 
@@ -71,8 +91,10 @@ A phone-shaped, dark, app-like web page:
 
 - **[node-GTFS](https://github.com/BlinkTag-Inc/node-gtfs)** — imports the GTFS `.zip` into
   SQLite and provides query functions for stops, routes, shapes, and scheduled times.
+  Since v4 it also fetches and decodes the GTFS-Realtime feeds into the same database, so
+  predictions can be matched against scheduled times directly.
 - **[gtfs-realtime-bindings](https://github.com/MobilityData/gtfs-realtime-bindings)** —
-  decodes the protobuf realtime feed into JS objects.
+  protobuf decoder. Installed, but unused: node-GTFS covers realtime decoding itself.
 - **[MapLibre GL JS](https://maplibre.org/)** — open-source map, no paid token, dark vector
   style via free [OpenFreeMap](https://openfreemap.org) tiles.
 - **[TanStack Query](https://tanstack.com/query)** — polls the backend and keeps countdowns
@@ -87,7 +109,7 @@ ottatransit/
 ├─ server/                 # Node + Express backend
 │  ├─ index.js             # Express app, routes
 │  ├─ gtfs.js              # node-GTFS import + query wrappers
-│  ├─ realtime.js          # poll + decode GTFS-RT (vehicles, trip updates, alerts)
+│  ├─ realtime.js          # poll GTFS-RT (vehicles, trip updates) + in-memory snapshot
 │  ├─ routing.js           # proxy to OpenTripPlanner
 │  ├─ config.json          # node-GTFS config (feed URL / path)
 │  └─ .env                 # OC_TRANSPO_API_KEY  (git-ignored)
@@ -153,16 +175,19 @@ Each phase ends with something visible/working.
 
 - **Phase 0 — Setup & data.** Scaffold Vite React app + `server/`. Register for the API key.
   Download the GTFS static `.zip`. Verify the key with a test fetch of VehiclePositions.
-- **Phase 1 — Backend foundation.** Configure node-GTFS, import GTFS into SQLite. Endpoints:
-  `/api/stops/nearby`, `/api/routes`, `/api/stops/:id/arrivals`, `/api/shapes/:routeId`.
-  Poll realtime every ~15s; `/api/vehicles`; merge TripUpdates into arrivals for live countdowns.
+- **Phase 1 — Backend foundation. ✅ Done.** node-GTFS imports the feed into SQLite on first
+  boot (~32s: 2.9M stop_times, 5,587 stops, 71,388 trips, 125 routes). Endpoints:
+  `/api/health`, `/api/routes`, `/api/stops/nearby`, `/api/stops/:id/arrivals`,
+  `/api/vehicles`, `/api/shapes/:routeId`, `/api/alerts` (always empty — no feed exists).
+  Realtime polls every 15s; TripUpdates are merged into arrivals for live countdowns.
 - **Phase 2 — Nearby & live arrivals.** Dark map + draggable bottom sheet. Geolocation →
   nearby routes with colored pills and big live countdowns. Tap a stop → all departures.
 - **Phase 3 — Map with live vehicles.** Draw route shapes and stops; animate live vehicle dots.
 - **Phase 4 — Favorites.** Zustand + localStorage; star/unstar stops and routes; pinned view.
 - **Phase 5 — Trip planner.** OpenTripPlanner in Docker (OC Transpo GTFS + Ottawa OSM extract).
   `POST /api/plan` proxies to OTP; render itineraries and draw them on the map.
-- **Phase 6 — Alerts & polish.** Service-alert banners; design pass to closely match Transit.
+- **Phase 6 — Polish.** Design pass to closely match Transit. The service-alert banners
+  originally planned here are dropped — OC Transpo publishes no Alerts feed.
 
 ## Verification
 
@@ -179,6 +204,9 @@ Each phase ends with something visible/working.
 - **Trip planner is the heaviest piece** — OpenTripPlanner needs Java + Docker + an OSM
   extract. Phases 0–4 + 6 can ship first, with the planner as a follow-up.
 - **API key & rate limits** — polling every ~15s with server-side caching stays within limits.
+  The feeds only refresh every ~40s, so the interval can be relaxed to cut upstream calls.
+- **No service alerts** — the portal publishes VehiclePositions and TripUpdates only, so the
+  alerts feature cannot be built as originally planned.
 - **Clones functionality, not proprietary assets** — Transit's logo/icons are not copied;
   equivalents are used for the "close clone" look.
 
