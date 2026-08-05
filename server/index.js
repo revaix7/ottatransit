@@ -6,6 +6,7 @@ import {
   getAllRoutes,
   getNearbyStops,
   getRouteShapes,
+  getRouteStops,
   getStopById,
 } from './gtfs.js'
 import {
@@ -51,6 +52,11 @@ app.get('/api/vehicles', (req, res) => {
 
 app.get('/api/shapes/:routeId', (req, res) => {
   res.json(getRouteShapes(req.params.routeId))
+})
+
+// Backs the map's stop highlighting when a route is selected.
+app.get('/api/routes/:routeId/stops', (req, res) => {
+  res.json(getRouteStops(req.params.routeId))
 })
 
 // OC Transpo's developer portal publishes VehiclePositions and TripUpdates

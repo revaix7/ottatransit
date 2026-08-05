@@ -4,7 +4,7 @@ import { formatDistance, groupByRouteDirection } from '../lib/departures.js'
 
 const MAX_LINES_PER_STOP = 3
 
-function StopCard({ stop, arrivals, now, onSelect }) {
+function StopCard({ stop, arrivals, now, onSelect, onSelectRoute, selectedRouteId }) {
   const groups = arrivals ? groupByRouteDirection(arrivals) : []
   const shown = groups.slice(0, MAX_LINES_PER_STOP)
 
@@ -15,24 +15,39 @@ function StopCard({ stop, arrivals, now, onSelect }) {
   const quiet = (stop.routes ?? []).filter((route) => !shownRouteIds.has(route.route_id))
 
   return (
-    <li>
-      <button type="button" className="stop-card" onClick={() => onSelect(stop.stop_id)}>
-        <span className="stop-card__head">
-          <span className="stop-card__name">{stop.stop_name}</span>
-          <span className="stop-card__meta">
-            {stop.stop_code ? `#${stop.stop_code} · ` : ''}
-            {formatDistance(stop.distance)}
-          </span>
+    <li className="stop-card">
+      {/* The stop name opens the stop; the lines below it open the route on the
+          map, which is the split Transit uses. */}
+      <button type="button" className="stop-card__head" onClick={() => onSelect(stop.stop_id)}>
+        <span className="stop-card__name">{stop.stop_name}</span>
+        <span className="stop-card__meta">
+          {stop.stop_code ? `#${stop.stop_code} · ` : ''}
+          {formatDistance(stop.distance)}
         </span>
+      </button>
 
-        {arrivals === null ? (
-          <span className="stop-card__placeholder" aria-hidden="true" />
-        ) : shown.length === 0 ? (
-          <span className="stop-card__quiet">No departures in the next 3 hours</span>
-        ) : (
-          <span className="departure-lines">
-            {shown.map((group) => (
-              <span className="departure-line" key={group.key}>
+      {arrivals === null ? (
+        <span className="stop-card__placeholder" aria-hidden="true" />
+      ) : shown.length === 0 ? (
+        <span className="stop-card__quiet">No departures in the next 3 hours</span>
+      ) : (
+        <ul className="departure-lines">
+          {shown.map((group) => (
+            <li key={group.key}>
+              <button
+                type="button"
+                className={`departure-line${
+                  group.routeId === selectedRouteId ? ' departure-line--active' : ''
+                }`}
+                aria-pressed={group.routeId === selectedRouteId}
+                onClick={() =>
+                  onSelectRoute({
+                    routeId: group.routeId,
+                    routeShortName: group.routeShortName,
+                    routeColor: group.routeColor,
+                  })
+                }
+              >
                 <RoutePill
                   shortName={group.routeShortName}
                   color={group.routeColor}
@@ -40,24 +55,37 @@ function StopCard({ stop, arrivals, now, onSelect }) {
                 />
                 <span className="departure-line__headsign">{group.headsign}</span>
                 <DepartureTimes departures={group.departures} now={now} />
-              </span>
-            ))}
-          </span>
-        )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-        {quiet.length > 0 && (
-          <span className="stop-card__quiet-routes">
-            {quiet.map((route) => (
+      {quiet.length > 0 && (
+        <span className="stop-card__quiet-routes">
+          {quiet.map((route) => (
+            <button
+              type="button"
+              key={route.route_id}
+              className="route-chip"
+              aria-pressed={route.route_id === selectedRouteId}
+              onClick={() =>
+                onSelectRoute({
+                  routeId: route.route_id,
+                  routeShortName: route.route_short_name,
+                  routeColor: route.route_color,
+                })
+              }
+            >
               <RoutePill
-                key={route.route_id}
                 shortName={route.route_short_name}
                 color={route.route_color}
                 size="sm"
               />
-            ))}
-          </span>
-        )}
-      </button>
+            </button>
+          ))}
+        </span>
+      )}
     </li>
   )
 }
@@ -71,6 +99,8 @@ export default function NearbySheet({
   arrivalsByStop,
   now,
   onSelectStop,
+  onSelectRoute,
+  selectedRouteId,
   isLoading,
   error,
   locationStatus,
@@ -104,6 +134,8 @@ export default function NearbySheet({
             arrivals={arrivalsByStop.get(stop.stop_id) ?? null}
             now={now}
             onSelect={onSelectStop}
+            onSelectRoute={onSelectRoute}
+            selectedRouteId={selectedRouteId}
           />
         ))}
       </ul>

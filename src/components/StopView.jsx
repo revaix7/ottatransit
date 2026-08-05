@@ -8,7 +8,14 @@ import { formatDistance, formatScheduledTime } from '../lib/departures.js'
  * useArrivals sets up. The list the user came from stays mounted behind this,
  * so going back is instant.
  */
-export default function StopView({ stopId, fallbackStop, now, onBack }) {
+export default function StopView({
+  stopId,
+  fallbackStop,
+  now,
+  onBack,
+  onSelectRoute,
+  selectedRouteId,
+}) {
   const { data, isLoading, error } = useArrivals(stopId)
   const stop = data?.stop ?? fallbackStop
   const arrivals = data?.arrivals ?? []
@@ -38,28 +45,45 @@ export default function StopView({ stopId, fallbackStop, now, onBack }) {
 
       <ul className="departure-list">
         {arrivals.map((arrival) => (
-          <li className="departure-row" key={`${arrival.tripId}-${arrival.scheduledEpoch}`}>
-            <RoutePill
-              shortName={arrival.routeShortName}
-              color={arrival.routeColor}
-              size="lg"
-            />
-            <span className="departure-row__text">
-              <span className="departure-row__headsign">{arrival.headsign}</span>
-              <span className="departure-row__meta">
-                {formatScheduledTime(arrival.scheduledTime)} scheduled
-                {arrival.isRealtime && arrival.delaySeconds !== null
-                  ? ` · ${describeDelay(arrival.delaySeconds)}`
-                  : ' · no live data'}
+          <li key={`${arrival.tripId}-${arrival.scheduledEpoch}`}>
+            {/* Tapping a departure puts its route on the map, matching what the
+                same row does in the nearby list. */}
+            <button
+              type="button"
+              className={`departure-row${
+                arrival.routeId === selectedRouteId ? ' departure-row--active' : ''
+              }`}
+              aria-pressed={arrival.routeId === selectedRouteId}
+              onClick={() =>
+                onSelectRoute({
+                  routeId: arrival.routeId,
+                  routeShortName: arrival.routeShortName,
+                  routeColor: arrival.routeColor,
+                })
+              }
+            >
+              <RoutePill
+                shortName={arrival.routeShortName}
+                color={arrival.routeColor}
+                size="lg"
+              />
+              <span className="departure-row__text">
+                <span className="departure-row__headsign">{arrival.headsign}</span>
+                <span className="departure-row__meta">
+                  {formatScheduledTime(arrival.scheduledTime)} scheduled
+                  {arrival.isRealtime && arrival.delaySeconds !== null
+                    ? ` · ${describeDelay(arrival.delaySeconds)}`
+                    : ' · no live data'}
+                </span>
               </span>
-            </span>
-            <Countdown
-              expectedEpoch={arrival.expectedEpoch}
-              now={now}
-              isRealtime={arrival.isRealtime}
-              cancelled={arrival.cancelled}
-              size="lg"
-            />
+              <Countdown
+                expectedEpoch={arrival.expectedEpoch}
+                now={now}
+                isRealtime={arrival.isRealtime}
+                cancelled={arrival.cancelled}
+                size="lg"
+              />
+            </button>
           </li>
         ))}
       </ul>

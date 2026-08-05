@@ -55,6 +55,58 @@
   }
 }
 
+/* ---------- selected route banner ---------- */
+
+/* Floats over the map rather than above the sheet, which keeps it clear of the
+   attribution and zoom controls in the bottom corners. */
+.route-banner {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  right: 64px;
+  max-width: 420px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--sheet-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+.route-banner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.route-banner__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.route-banner__meta {
+  display: block;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.route-banner__clear {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.route-banner__clear:hover {
+  background: var(--sheet-hover);
+  color: var(--text);
+}
+
 /* ---------- bottom sheet ---------- */
 
 .sheet {
@@ -199,14 +251,20 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 100%;
   padding: 12px 16px;
-  text-align: left;
   border-top: 1px solid var(--border-soft);
 }
 
-.stop-card:hover {
-  background: var(--sheet-raised);
+/* The tappable regions inside a card bleed 8px past its padding so the hover
+   highlight has some breathing room while the text stays aligned with the
+   16px gutter the headers use. */
+.stop-card__head,
+.departure-line {
+  width: calc(100% + 16px);
+  margin-inline: -8px;
+  padding-inline: 8px;
+  border-radius: var(--radius-sm);
+  text-align: left;
 }
 
 .stop-card__head {
@@ -214,6 +272,12 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  padding-block: 2px;
+}
+
+.stop-card__head:hover,
+.departure-line:hover {
+  background: var(--sheet-raised);
 }
 
 .stop-card__name {
@@ -247,19 +311,43 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+/* Routes with nothing due sit back until they're hovered or put on the map. */
+.route-chip {
+  display: inline-flex;
+  border-radius: var(--radius-sm);
   opacity: 0.45;
+  transition: opacity 120ms ease;
+}
+
+.route-chip:hover,
+.route-chip[aria-pressed='true'] {
+  opacity: 1;
+}
+
+.route-chip[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .departure-lines {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 .departure-line {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding-block: 3px;
+}
+
+.departure-line--active,
+.departure-row--active {
+  background: var(--sheet-hover);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .departure-line__headsign {
@@ -371,10 +459,16 @@
 
 .departure-row {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
+  text-align: left;
   border-top: 1px solid var(--border-soft);
+}
+
+.departure-row:hover {
+  background: var(--sheet-raised);
 }
 
 .departure-row__text {

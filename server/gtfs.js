@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import dotenv from 'dotenv'
-import { importGtfs, openDb, getRoutes, getShapesAsGeoJSON } from 'gtfs'
+import { importGtfs, openDb, getRoutes, getShapesAsGeoJSON, getStops } from 'gtfs'
 
 const serverDir = import.meta.dirname
 const repoRoot = path.join(serverDir, '..')
@@ -150,6 +150,19 @@ export function getNearbyStops(lat, lon, radiusMeters = 800, limit = 25) {
 export function getRouteShapes(routeId) {
   const database = requireDb()
   return getShapesAsGeoJSON({ route_id: routeId }, { db: database })
+}
+
+/**
+ * Every stop the route calls at. node-GTFS resolves this through trips and
+ * stop_times, so it covers all branches and directions of the route.
+ */
+export function getRouteStops(routeId) {
+  return getStops(
+    { route_id: routeId },
+    ['stop_id', 'stop_code', 'stop_name', 'stop_lat', 'stop_lon'],
+    [],
+    { db: requireDb() },
+  )
 }
 
 /** A single stop, or undefined if the id is unknown. */
