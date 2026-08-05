@@ -107,6 +107,46 @@ ottatransit/
 └─ package.json
 ```
 
+## Setup
+
+```bash
+npm install
+npm run dev        # starts Vite (http://localhost:5173) + Express (http://localhost:3000)
+```
+
+`npm run dev` runs both halves via `concurrently`; Vite proxies `/api/*` to the Express
+server, so the frontend only ever talks to its own origin.
+
+### API key
+
+Copy `server/.env.example` to `server/.env` and paste in your free OC Transpo key from the
+[developer portal](https://nextrip-public-api.developer.azure-api.net):
+
+```
+OC_TRANSPO_API_KEY=your-key-here
+```
+
+`server/.env` is git-ignored. The key is only needed from Phase 1 onward (GTFS-Realtime);
+the static GTFS feed needs no key.
+
+### GTFS static data
+
+The feed lives at `data/oc-transpo-gtfs.zip` (git-ignored — ~55 MB). It's already downloaded;
+to refresh it:
+
+```bash
+curl -L -o data/oc-transpo-gtfs.zip https://oct-gtfs-emasagcnfmcgeham.z01.azurefd.net/public-access/GTFSExport.zip
+```
+
+That URL is the one OC Transpo publishes through
+[Open Ottawa → OC Transpo Schedules](https://open.ottawa.ca/documents/ottawa::oc-transpo-schedules/about);
+if it ever moves, get the current `.zip` link from that dataset page and save it to the same
+path. `server/config.json` points node-GTFS at that path and builds `data/oc-transpo.sqlite`.
+
+> **Windows note:** `better-sqlite3` is pinned to `13.0.3` via a `package.json` override
+> because `13.0.1` (the version node-GTFS depends on) has no prebuilt binaries and requires a
+> full Visual Studio + Windows SDK toolchain to compile. `13.0.3` ships prebuilds.
+
 ## Build phases
 
 Each phase ends with something visible/working.

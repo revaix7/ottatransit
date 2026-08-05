@@ -1,0 +1,11 @@
+{
+  "agencies": [
+    {
+      "agency_key": "oc-transpo",
+      "path": "./data/oc-transpo-gtfs.zip"
+    }
+  ],
+  "sqlitePath": "./data/oc-transpo.sqlite",
+  "ignoreDuplicates": true,
+  "verbose": true
+}
