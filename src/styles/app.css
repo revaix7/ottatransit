@@ -1,0 +1,399 @@
+/* Layout, map chrome, bottom sheet, and the transit rows inside it. */
+
+.app {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ---------- map ---------- */
+
+/* Overrides `.maplibregl-map { position: relative }`, which would otherwise
+   collapse the map to zero height. See the import order in main.jsx. */
+.map {
+  position: absolute;
+  inset: 0;
+}
+
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+  /* Keep the zoom buttons and attribution clear of the sheet. */
+  bottom: calc(var(--sheet-height, 0px) + 8px);
+}
+
+.maplibregl-ctrl-group {
+  background: var(--sheet-raised);
+  border: 1px solid var(--border);
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--border);
+}
+
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+
+.user-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2f80ff;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 6px rgb(47 128 255 / 25%);
+  animation: user-pulse 2.4s ease-out infinite;
+}
+
+@keyframes user-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgb(47 128 255 / 30%);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px rgb(47 128 255 / 8%);
+  }
+}
+
+/* ---------- bottom sheet ---------- */
+
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sheet);
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -12px 40px rgb(0 0 0 / 55%);
+  transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  max-width: 520px;
+  margin-inline: auto;
+}
+
+/* While a finger or cursor is down the height must track it exactly, so the
+   settling transition is suspended. */
+.sheet--dragging {
+  transition: none;
+}
+
+.sheet__grip {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 26px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.sheet--dragging .sheet__grip {
+  cursor: grabbing;
+}
+
+.sheet__handle {
+  width: 44px;
+  height: 5px;
+  border-radius: 99px;
+  background: #3a4150;
+}
+
+.sheet__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 24px;
+}
+
+/* ---------- headers ---------- */
+
+.sheet-header {
+  padding: 4px 16px 12px;
+}
+
+.sheet-header__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sheet-header__subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 99px;
+  background: var(--sheet-raised);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.back-button:hover {
+  background: var(--sheet-hover);
+  color: var(--text);
+}
+
+.back-button span {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.notice {
+  margin: 8px 16px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.notice--error {
+  color: var(--danger);
+}
+
+/* ---------- route pills ---------- */
+
+.route-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.route-pill--sm {
+  min-width: 28px;
+  height: 20px;
+  font-size: 12px;
+}
+
+.route-pill--lg {
+  min-width: 42px;
+  height: 30px;
+  font-size: 16px;
+}
+
+/* ---------- nearby list ---------- */
+
+.stop-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.stop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  border-top: 1px solid var(--border-soft);
+}
+
+.stop-card:hover {
+  background: var(--sheet-raised);
+}
+
+.stop-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stop-card__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: capitalize;
+}
+
+.stop-card__meta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.stop-card__quiet,
+.times--empty {
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* Reserves the row height while the first arrivals request is in flight, so
+   the list doesn't jump as each stop's countdowns land. */
+.stop-card__placeholder {
+  display: block;
+  height: 34px;
+}
+
+.stop-card__quiet-routes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  opacity: 0.45;
+}
+
+.departure-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.departure-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.departure-line__headsign {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- countdowns ---------- */
+
+.times {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.times__sep {
+  color: var(--text-faint);
+}
+
+.countdown {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.countdown__value {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.countdown--lg .countdown__value {
+  font-size: 26px;
+}
+
+.countdown--md .countdown__value {
+  font-size: 20px;
+}
+
+.countdown--sm .countdown__value {
+  font-size: 17px;
+}
+
+.countdown__unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.countdown--scheduled {
+  color: var(--text-dim);
+}
+
+.countdown--live {
+  color: var(--text);
+}
+
+/* The dot that marks a time as coming from the live feed rather than the
+   timetable — Transit's equivalent of the little rippling signal icon. */
+.countdown--dot::before {
+  content: '';
+  align-self: center;
+  width: 6px;
+  height: 6px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background: var(--live);
+  animation: live-blink 2s ease-in-out infinite;
+}
+
+@keyframes live-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.countdown--now .countdown__value,
+.countdown--now {
+  color: var(--live);
+  font-weight: 700;
+}
+
+.countdown--cancelled {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- stop view ---------- */
+
+.departure-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.departure-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.departure-row__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.departure-row__headsign {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.departure-row__meta {
+  display: block;
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}

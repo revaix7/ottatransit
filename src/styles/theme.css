@@ -1,0 +1,79 @@
+/* Dark theme tokens and the base reset. Everything visual keys off these. */
+
+:root {
+  --bg: #0b0d10;
+  --sheet: #14171d;
+  --sheet-raised: #1b1f27;
+  --sheet-hover: #222733;
+  --border: #262b35;
+  --border-soft: #1e222b;
+
+  --text: #f2f5f9;
+  --text-dim: #98a1b0;
+  --text-faint: #6b7382;
+
+  --live: #35d07f;
+  --accent: #ffb020;
+  --danger: #ff6b6b;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  /* The sheet handles its own scrolling; the page itself never scrolls. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
