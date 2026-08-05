@@ -20,16 +20,24 @@ const VEHICLES_SOURCE = 'vehicles'
 
 const EMPTY_COLLECTION = { type: 'FeatureCollection', features: [] }
 
-// Vehicles are interpolated across roughly one poll interval, so the dots drift
-// continuously instead of teleporting once every fetch. Finishing just before
-// the next response lands keeps them moving without a visible stall.
-const TWEEN_MS = 11_000
 // At bus speed, 20fps is indistinguishable from 60 and costs a third as much
 // when the entire fleet is on screen.
 const FRAME_MS = 50
 // A vehicle whose last report is this old is drawn faded rather than dropped —
 // the feed skips individual buses for a minute or two fairly often.
 const STALE_AFTER_S = 300
+// How quickly a dot closes the gap to where dead reckoning says it should be.
+// Long enough that a corrected report slides in rather than snapping, short
+// enough that the lag it introduces is a few metres.
+const SMOOTHING_TAU_MS = 1500
+// Dead reckoning stops growing after this long without a report. A bus that
+// braked or turned the moment after it reported would otherwise sail off down
+// the street it was last seen on.
+const MAX_PROJECTION_S = 90
+// Below this the vehicle is treated as parked and drawn where it reported.
+const MIN_SPEED_MS = 0.5
+
+const M_PER_DEG_LAT = 111320
 
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -68,13 +76,46 @@ function vehiclesToGeoJSON(vehicles, positions, nowSeconds) {
   }
 }
 
-/** Reported coordinates keyed by vehicle id, dropping anything unplottable. */
-function positionsOf(vehicles) {
-  return new Map(
-    (vehicles ?? [])
-      .filter((vehicle) => Number.isFinite(vehicle.lat) && Number.isFinite(vehicle.lon))
-      .map((vehicle) => [vehicle.id, [vehicle.lon, vehicle.lat]]),
-  )
+/**
+ * Where a vehicle should be by now, given where it last reported and how fast it
+ * was going.
+ *
+ * OC Transpo republishes VehiclePositions only about once a minute, and each
+ * report is already ~40s old when it arrives. Drawing the raw coordinates leaves
+ * every dot motionless for most of each cycle, so instead the reported bearing
+ * and speed carry it forward between reports and the next report corrects the
+ * guess.
+ */
+function projectPosition(vehicle, nowSeconds) {
+  const { lat, lon, bearing, speed, timestamp } = vehicle
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+
+  const reported = [lon, lat]
+  if (!Number.isFinite(speed) || speed < MIN_SPEED_MS) return reported
+  if (!Number.isFinite(bearing) || !Number.isFinite(timestamp)) return reported
+
+  const elapsed = Math.min(Math.max(nowSeconds - timestamp, 0), MAX_PROJECTION_S)
+  if (elapsed === 0) return reported
+
+  // Equirectangular is exact to within centimetres over the couple of kilometres
+  // this ever projects, and costs a fraction of a great-circle step per frame.
+  const distance = speed * elapsed
+  const radians = (bearing * Math.PI) / 180
+  const dLat = (distance * Math.cos(radians)) / M_PER_DEG_LAT
+  const dLon =
+    (distance * Math.sin(radians)) / (M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180))
+
+  return [lon + dLon, lat + dLat]
+}
+
+/** Dead-reckoned positions keyed by vehicle id, dropping anything unplottable. */
+function projectAll(vehicles, nowSeconds) {
+  const positions = new Map()
+  for (const vehicle of vehicles ?? []) {
+    const at = projectPosition(vehicle, nowSeconds)
+    if (at) positions.set(vehicle.id, at)
+  }
+  return positions
 }
 
 function boundsOf(featureCollection) {
@@ -120,11 +161,10 @@ export default function MapView({
   const onSelectRouteRef = useRef(onSelectRoute)
   onSelectRouteRef.current = onSelectRoute
 
-  // The animation runs outside React: the latest fetch, where each vehicle is
-  // currently drawn, and the in-flight tween.
+  // The animation runs outside React: the latest fetch, and where each vehicle
+  // is currently drawn.
   const vehiclesRef = useRef(vehicles)
   const drawnRef = useRef(new Map())
-  const tweenRef = useRef(null)
 
   // Props the load handler needs to replay once the style is ready.
   const pendingRef = useRef({})
@@ -290,20 +330,18 @@ export default function MapView({
       if (pending.routeColor) {
         map.setPaintProperty('route-line', 'line-color', pending.routeColor)
       }
-      // The first fetch usually beats the style, so seed the drawn positions
-      // here as well as painting them. Without the seed the next poll would
-      // have nowhere to animate from and the fleet would sit still for a whole
-      // cycle before it started moving.
-      drawnRef.current = positionsOf(vehiclesRef.current)
+      // The first fetch usually beats the style. Seeding the drawn positions
+      // here means the animation loop starts from real coordinates instead of
+      // easing the whole fleet in from wherever it first saw them.
+      const seededAt = Date.now() / 1000
+      drawnRef.current = projectAll(vehiclesRef.current, seededAt)
       map.getSource(VEHICLES_SOURCE).setData(
-        vehiclesToGeoJSON(vehiclesRef.current, drawnRef.current, Date.now() / 1000),
+        vehiclesToGeoJSON(vehiclesRef.current, drawnRef.current, seededAt),
       )
     })
 
     return () => {
       loadedRef.current = false
-      if (tweenRef.current) cancelAnimationFrame(tweenRef.current.frame)
-      tweenRef.current = null
       userMarkerRef.current?.remove()
       userMarkerRef.current = null
       map.remove()
@@ -381,66 +419,68 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeShapes])
 
-  // Live vehicles: retarget the tween at the new positions, starting from
-  // wherever each dot happens to be right now.
+  // New data from the feed. The animation loop below picks it up on its next
+  // frame; dots that dropped out of the feed stop being drawn.
   useEffect(() => {
     vehiclesRef.current = vehicles
-    const map = mapRef.current
-    if (!map || !loadedRef.current) return
-
-    const source = map.getSource(VEHICLES_SOURCE)
-    if (!source) return
-
-    const targets = positionsOf(vehicles)
-
-    if (tweenRef.current) cancelAnimationFrame(tweenRef.current.frame)
-
-    const draw = (positions) => {
-      drawnRef.current = positions
-      source.setData(vehiclesToGeoJSON(vehiclesRef.current, positions, Date.now() / 1000))
+    const live = new Set((vehicles ?? []).map((vehicle) => vehicle.id))
+    for (const id of drawnRef.current.keys()) {
+      if (!live.has(id)) drawnRef.current.delete(id)
     }
-
-    if (prefersReducedMotion()) {
-      tweenRef.current = null
-      draw(targets)
-      return
-    }
-
-    // A vehicle seen for the first time has no previous position to leave from,
-    // so it simply appears where it is.
-    const origins = new Map()
-    for (const [id, target] of targets) {
-      origins.set(id, drawnRef.current.get(id) ?? target)
-    }
-
-    const start = performance.now()
-    let lastFrame = 0
-
-    const step = (time) => {
-      const progress = Math.min((time - start) / TWEEN_MS, 1)
-
-      if (time - lastFrame >= FRAME_MS || progress === 1) {
-        lastFrame = time
-        const positions = new Map()
-        for (const [id, target] of targets) {
-          const from = origins.get(id)
-          positions.set(id, [
-            from[0] + (target[0] - from[0]) * progress,
-            from[1] + (target[1] - from[1]) * progress,
-          ])
-        }
-        draw(positions)
-      }
-
-      if (progress < 1) {
-        tweenRef.current.frame = requestAnimationFrame(step)
-      } else {
-        tweenRef.current = null
-      }
-    }
-
-    tweenRef.current = { frame: requestAnimationFrame(step) }
   }, [vehicles])
+
+  // The fleet animates on its own clock rather than on the fetch cycle, because
+  // four out of five fetches carry coordinates identical to the last one. Every
+  // frame each dot is redrawn where dead reckoning puts it by now, eased toward
+  // that estimate so a correction slides into place instead of snapping.
+  useEffect(() => {
+    const reduced = prefersReducedMotion()
+    let frame = requestAnimationFrame(tick)
+    let lastDraw = 0
+
+    function tick(time) {
+      frame = requestAnimationFrame(tick)
+
+      const map = mapRef.current
+      if (!map || !loadedRef.current) return
+      if (time - lastDraw < FRAME_MS) return
+
+      const source = map.getSource(VEHICLES_SOURCE)
+      if (!source) return
+
+      const elapsed = lastDraw ? time - lastDraw : FRAME_MS
+      lastDraw = time
+
+      const nowSeconds = Date.now() / 1000
+      // The fraction of the remaining gap to close this frame, derived from the
+      // real frame time so the easing looks the same at 20fps or 60.
+      const alpha = reduced ? 1 : 1 - Math.exp(-elapsed / SMOOTHING_TAU_MS)
+
+      const positions = new Map()
+      for (const vehicle of vehiclesRef.current ?? []) {
+        const target = projectPosition(vehicle, nowSeconds)
+        if (!target) continue
+
+        // A vehicle seen for the first time has nowhere to ease from, so it
+        // simply appears where it is.
+        const drawn = drawnRef.current.get(vehicle.id)
+        positions.set(
+          vehicle.id,
+          drawn
+            ? [
+                drawn[0] + (target[0] - drawn[0]) * alpha,
+                drawn[1] + (target[1] - drawn[1]) * alpha,
+              ]
+            : target,
+        )
+      }
+
+      drawnRef.current = positions
+      source.setData(vehiclesToGeoJSON(vehiclesRef.current, positions, nowSeconds))
+    }
+
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   // The user's position: a blue dot, recentred as the fix improves.
   useEffect(() => {
