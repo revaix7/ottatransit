@@ -33,7 +33,12 @@ export default function App() {
   // instead of staying pinned to wherever they happened to open the app.
   const [viewport, setViewport] = useState(null)
 
-  const { data: stops, isLoading, error } = useNearby(location.lat, location.lon, NEARBY_RADIUS_M)
+  const {
+    data: stops,
+    isLoading,
+    error,
+    refetch: refetchNearby,
+  } = useNearby(location.lat, location.lon, NEARBY_RADIUS_M)
 
   const countdownStopIds = useMemo(
     () => (stops ?? []).slice(0, STOPS_WITH_COUNTDOWNS).map((stop) => stop.stop_id),
@@ -113,6 +118,7 @@ export default function App() {
             selectedRouteId={routeId}
             isLoading={isLoading}
             error={error}
+            onRetry={refetchNearby}
             locationStatus={location.status}
           />
         </div>

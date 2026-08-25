@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import StopCard from './StopCard.jsx'
 import RoutePill from './RoutePill.jsx'
 import FavoriteStar from './FavoriteStar.jsx'
+import EmptyState from './EmptyState.jsx'
+import { SkeletonStopCard } from './Skeleton.jsx'
 import { useFavorites } from '../store/favorites.js'
 import { useArrivalsForStops } from '../hooks/useArrivals.js'
 import { useRoutes } from '../hooks/useRouteDetails.js'
@@ -41,10 +43,11 @@ export default function Favorites({ now, onSelectStop, onSelectRoute, selectedRo
       </header>
 
       {isEmpty && (
-        <p className="notice notice--hint">
-          Tap <span aria-hidden="true">☆</span> on a stop below — or on a route once it&apos;s open
-          on the map — to keep it here.
-        </p>
+        <EmptyState
+          icon="☆"
+          title="Nothing saved yet"
+          detail="Tap the star on a stop below, or on a route once it's open on the map, to keep it here."
+        />
       )}
 
       {routes.length > 0 && (
@@ -86,11 +89,7 @@ export default function Favorites({ now, onSelectStop, onSelectRoute, selectedRo
             // Until the first response lands there's no name to show, so the row
             // waits rather than flashing the raw id at the user.
             if (!stop) {
-              return (
-                <li key={stopId} className="stop-card">
-                  <span className="stop-card__placeholder" aria-hidden="true" />
-                </li>
-              )
+              return <SkeletonStopCard key={stopId} />
             }
             return (
               <StopCard

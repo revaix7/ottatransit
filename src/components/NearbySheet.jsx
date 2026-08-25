@@ -1,4 +1,6 @@
 import StopCard from './StopCard.jsx'
+import EmptyState from './EmptyState.jsx'
+import { SkeletonStopList } from './Skeleton.jsx'
 
 /**
  * The default sheet contents: nearby stops sorted by distance, each showing the
@@ -13,8 +15,11 @@ export default function NearbySheet({
   selectedRouteId,
   isLoading,
   error,
+  onRetry,
   locationStatus,
 }) {
+  const isEmpty = !isLoading && !error && stops?.length === 0
+
   return (
     <div className="nearby">
       <header className="sheet-header">
@@ -28,12 +33,24 @@ export default function NearbySheet({
         </p>
       </header>
 
-      {error && <p className="notice notice--error">Couldn&apos;t load nearby stops: {error.message}</p>}
+      {error && (
+        <EmptyState
+          tone="error"
+          icon="⚠"
+          title="Couldn't load nearby stops"
+          detail={error.message}
+          action={onRetry ? { label: 'Try again', onClick: onRetry } : undefined}
+        />
+      )}
 
-      {isLoading && !stops?.length && <p className="notice">Loading stops…</p>}
+      {isLoading && !stops?.length && <SkeletonStopList />}
 
-      {!isLoading && stops?.length === 0 && (
-        <p className="notice">No stops within walking distance.</p>
+      {isEmpty && (
+        <EmptyState
+          icon="🚏"
+          title="No stops within walking distance"
+          detail="Pan the map to somewhere with service, or check your location permission."
+        />
       )}
 
       <ul className="stop-list">

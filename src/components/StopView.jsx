@@ -1,6 +1,8 @@
 import RoutePill from './RoutePill.jsx'
 import Countdown from './Countdown.jsx'
 import FavoriteStar from './FavoriteStar.jsx'
+import EmptyState from './EmptyState.jsx'
+import { SkeletonDepartureList } from './Skeleton.jsx'
 import { useArrivals } from '../hooks/useArrivals.js'
 import { useFavorites, useIsFavoriteStop } from '../store/favorites.js'
 import { formatDistance, formatScheduledTime } from '../lib/departures.js'
@@ -45,13 +47,22 @@ export default function StopView({
       </header>
 
       {error && (
-        <p className="notice notice--error">Couldn&apos;t load departures: {error.message}</p>
+        <EmptyState
+          tone="error"
+          icon="⚠"
+          title="Couldn't load departures"
+          detail={error.message}
+        />
       )}
 
-      {isLoading && <p className="notice">Loading departures…</p>}
+      {isLoading && <SkeletonDepartureList />}
 
       {!isLoading && !error && arrivals.length === 0 && (
-        <p className="notice">Nothing scheduled in the next 3 hours.</p>
+        <EmptyState
+          icon="🌙"
+          title="Nothing scheduled in the next 3 hours"
+          detail="This stop may only be served at peak times, or service has finished for the night."
+        />
       )}
 
       <ul className="departure-list">

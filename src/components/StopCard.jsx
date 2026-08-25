@@ -1,6 +1,7 @@
 import RoutePill from './RoutePill.jsx'
 import DepartureTimes from './DepartureTimes.jsx'
 import FavoriteStar from './FavoriteStar.jsx'
+import { SkeletonBar } from './Skeleton.jsx'
 import { useFavorites, useIsFavoriteStop } from '../store/favorites.js'
 import { formatDistance, groupByRouteDirection } from '../lib/departures.js'
 
@@ -53,7 +54,11 @@ export default function StopCard({
       </div>
 
       {arrivals === null ? (
-        <span className="stop-card__placeholder" aria-hidden="true" />
+        <span className="skeleton-line" aria-hidden="true">
+          <SkeletonBar width="34px" height={20} />
+          <SkeletonBar width="45%" height={12} />
+          <SkeletonBar width="42px" height={16} />
+        </span>
       ) : shown.length === 0 ? (
         <span className="stop-card__quiet">No departures in the next 3 hours</span>
       ) : (

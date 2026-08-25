@@ -139,6 +139,10 @@ npm run dev        # starts Vite (http://localhost:5173) + Express (http://local
 `npm run dev` runs both halves via `concurrently`; Vite proxies `/api/*` to the Express
 server, so the frontend only ever talks to its own origin.
 
+The API port defaults to `3000`. If something else already holds it, set `PORT` in
+`server/.env` — `vite.config.js` reads the same file to point its proxy at the right place,
+so the two cannot drift apart.
+
 ### API key
 
 Copy `server/.env.example` to `server/.env` and paste in your free OC Transpo key from the
@@ -180,14 +184,23 @@ Each phase ends with something visible/working.
   `/api/health`, `/api/routes`, `/api/stops/nearby`, `/api/stops/:id/arrivals`,
   `/api/vehicles`, `/api/shapes/:routeId`, `/api/alerts` (always empty — no feed exists).
   Realtime polls every 15s; TripUpdates are merged into arrivals for live countdowns.
-- **Phase 2 — Nearby & live arrivals.** Dark map + draggable bottom sheet. Geolocation →
-  nearby routes with colored pills and big live countdowns. Tap a stop → all departures.
-- **Phase 3 — Map with live vehicles.** Draw route shapes and stops; animate live vehicle dots.
-- **Phase 4 — Favorites.** Zustand + localStorage; star/unstar stops and routes; pinned view.
-- **Phase 5 — Trip planner.** OpenTripPlanner in Docker (OC Transpo GTFS + Ottawa OSM extract).
-  `POST /api/plan` proxies to OTP; render itineraries and draw them on the map.
-- **Phase 6 — Polish.** Design pass to closely match Transit. The service-alert banners
-  originally planned here are dropped — OC Transpo publishes no Alerts feed.
+- **Phase 2 — Nearby & live arrivals. ✅ Done.** Dark map + draggable bottom sheet.
+  Geolocation → nearby routes with colored pills and big live countdowns. Tap a stop → all
+  departures.
+- **Phase 3 — Map with live vehicles. ✅ Done.** Route shapes and stops; vehicle dots animated
+  by dead reckoning between the 15s polls rather than tweened per fetch. A later pass added
+  `/api/stops/in-bounds` (every stop in the viewport, past zoom 13) and `/api/rail` (the
+  O-Train lines, drawn permanently rather than only while selected).
+- **Phase 4 — Favorites. ✅ Done.** Zustand persisted to localStorage, storing ids only; stars
+  on stop rows, the stop screen and the route banner; a Favourites section pinned above
+  Nearby. Saved stops share query keys with the nearby list, so a stop that is both is
+  fetched once.
+- **Phase 5 — Trip planner. ⛔ Blocked.** Needs OpenTripPlanner in Docker (OC Transpo GTFS +
+  Ottawa OSM extract); `POST /api/plan` would proxy to OTP. Docker is not installed on the
+  dev machine, so this phase has not been started.
+- **Phase 6 — Polish. ◐ In progress.** Loading skeletons and shared empty/error states are
+  in. The service-alert banners originally planned here are dropped — OC Transpo publishes no
+  Alerts feed.
 
 ## Verification
 
@@ -195,8 +208,9 @@ Each phase ends with something visible/working.
   coordinates change between calls; `/api/stops/nearby` returns real Ottawa stops; arrivals
   include realtime-adjusted times.
 - **Frontend:** load the site, allow location, confirm nearby routes + counting-down timers;
-  confirm vehicle dots move over ~30–60s; save a favorite and reload to confirm it persists;
-  run a trip plan (e.g. Tunney's Pasture → uOttawa) and confirm itineraries render.
+  confirm vehicle dots move over ~30–60s; save a favorite and reload to confirm it persists.
+  Once Phase 5 lands, also run a trip plan (e.g. Tunney's Pasture → uOttawa) and confirm
+  itineraries render.
 - **Sanity check:** compare a countdown and live bus position to the official OC Transpo site.
 
 ## Risks / caveats

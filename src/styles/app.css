@@ -300,13 +300,6 @@
   color: var(--text-faint);
 }
 
-/* Reserves the row height while the first arrivals request is in flight, so
-   the list doesn't jump as each stop's countdowns land. */
-.stop-card__placeholder {
-  display: block;
-  height: 34px;
-}
-
 .stop-card__quiet-routes {
   display: flex;
   flex-wrap: wrap;
@@ -589,4 +582,136 @@
   position: absolute;
   right: 12px;
   bottom: 10px;
+}
+
+/* ---------- loading skeletons ---------- */
+
+/* A sweep across a flat bar. The gradient is wider than the bar so the
+   highlight travels through it; prefers-reduced-motion in theme.css stops the
+   animation, leaving a plain bar that still reads as a pending row. */
+.skeleton {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--sheet-raised) 0%,
+    var(--sheet-hover) 50%,
+    var(--sheet-raised) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Mirrors .departure-line's columns so the real rows land where the
+   placeholders were. */
+.skeleton-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+
+.skeleton-line .skeleton:nth-child(2) {
+  margin-right: auto;
+}
+
+.skeleton-stack {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stop-card--skeleton,
+.departure-row--skeleton {
+  pointer-events: none;
+}
+
+.departure-row--skeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------- empty and error states ---------- */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.empty-state__icon {
+  font-size: 26px;
+  line-height: 1;
+  margin-bottom: 4px;
+  opacity: 0.7;
+}
+
+.empty-state__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.empty-state__detail {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-faint);
+  max-width: 34ch;
+}
+
+.empty-state--error .empty-state__title {
+  color: var(--danger);
+}
+
+/* The error detail is a raw exception message, so it gets monospace and a
+   break rule rather than being styled as prose. */
+.empty-state--error .empty-state__detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.empty-state__action {
+  margin-top: 10px;
+  padding: 7px 16px;
+  border-radius: 99px;
+  background: var(--sheet-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 120ms ease;
+}
+
+.empty-state__action:hover {
+  background: var(--sheet-hover);
+}
+
+/* The favourites hint is quieter than a real empty screen — it sits above a
+   list that does have content. */
+.favorites .empty-state {
+  padding: 12px 24px 16px;
 }
