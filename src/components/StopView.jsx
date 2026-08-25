@@ -1,6 +1,8 @@
 import RoutePill from './RoutePill.jsx'
 import Countdown from './Countdown.jsx'
+import FavoriteStar from './FavoriteStar.jsx'
 import { useArrivals } from '../hooks/useArrivals.js'
+import { useFavorites, useIsFavoriteStop } from '../store/favorites.js'
 import { formatDistance, formatScheduledTime } from '../lib/departures.js'
 
 /**
@@ -20,6 +22,9 @@ export default function StopView({
   const stop = data?.stop ?? fallbackStop
   const arrivals = data?.arrivals ?? []
 
+  const isFavorite = useIsFavoriteStop(stopId)
+  const toggleStop = useFavorites((state) => state.toggleStop)
+
   return (
     <div className="stop-view">
       <header className="sheet-header sheet-header--with-back">
@@ -31,6 +36,12 @@ export default function StopView({
           {stop?.stop_code ? `Stop #${stop.stop_code}` : `Stop ${stopId}`}
           {Number.isFinite(fallbackStop?.distance) ? ` · ${formatDistance(fallbackStop.distance)}` : ''}
         </p>
+        <FavoriteStar
+          active={isFavorite}
+          onToggle={() => toggleStop(stopId)}
+          label={stop?.stop_name ?? 'this stop'}
+          size="lg"
+        />
       </header>
 
       {error && (

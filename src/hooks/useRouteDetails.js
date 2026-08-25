@@ -28,3 +28,15 @@ export function useRouteStops(routeId) {
     gcTime: 30 * 60_000,
   })
 }
+
+/**
+ * Every route in the feed. Small, static, and fetched once: it's what turns a
+ * saved route id back into a number and a colour.
+ */
+export function useRoutes() {
+  return useQuery({
+    queryKey: ['routes'],
+    queryFn: ({ signal }) => fetchJson('/api/routes', { signal }),
+    staleTime: STATIC_STALE_MS,
+  })
+}

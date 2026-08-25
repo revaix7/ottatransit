@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import MapView from './components/MapView.jsx'
 import BottomSheet from './components/BottomSheet.jsx'
 import NearbySheet from './components/NearbySheet.jsx'
+import Favorites from './components/Favorites.jsx'
 import StopView from './components/StopView.jsx'
 import RouteBanner from './components/RouteBanner.jsx'
 import { useGeolocation } from './hooks/useGeolocation.js'
@@ -97,6 +98,12 @@ export default function App() {
         {/* Kept mounted while a stop is open so its polling stays warm and
             going back restores the list instantly, scroll position and all. */}
         <div hidden={Boolean(selectedStopId)}>
+          <Favorites
+            now={now}
+            onSelectStop={setSelectedStopId}
+            onSelectRoute={setSelectedRoute}
+            selectedRouteId={routeId}
+          />
           <NearbySheet
             stops={stops}
             arrivalsByStop={byStop}

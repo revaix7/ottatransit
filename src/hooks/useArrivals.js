@@ -33,11 +33,17 @@ export function useArrivalsForStops(stopIds) {
 
   const combine = useCallback((results) => {
     const byStop = new Map()
+    // The stop record rides along in the same response, which is the only thing
+    // that knows a favourited stop's name when it isn't in the nearby list.
+    const stopById = new Map()
     results.forEach((result, index) => {
-      byStop.set(idsRef.current[index], result.data?.arrivals ?? null)
+      const stopId = idsRef.current[index]
+      byStop.set(stopId, result.data?.arrivals ?? null)
+      if (result.data?.stop) stopById.set(stopId, result.data.stop)
     })
     return {
       byStop,
+      stopById,
       isLoading: results.some((result) => result.isLoading),
     }
   }, [])

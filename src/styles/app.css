@@ -491,3 +491,102 @@
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- favourites ---------- */
+
+/* The name and the star share a row, so the star sits on the card's right edge
+   with the same 8px bleed the tappable regions inside a card use. */
+.stop-card__top {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-inline: -8px;
+}
+
+.stop-card__top .stop-card__head {
+  flex: 1 1 auto;
+  width: auto;
+  margin-inline: 0;
+}
+
+.fav-star {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 99px;
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.fav-star:hover {
+  background: var(--sheet-hover);
+  color: var(--text-dim);
+}
+
+.fav-star--on,
+.fav-star--on:hover {
+  color: var(--accent);
+}
+
+.fav-star--sm {
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+}
+
+.fav-star--lg {
+  width: 34px;
+  height: 34px;
+  font-size: 20px;
+}
+
+/* Pinned above Nearby, and separated from it hard enough that the list below
+   still reads as its own section. */
+.favorites {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.favorites .sheet-header__title {
+  font-size: 18px;
+}
+
+.favorites__routes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 16px 4px;
+}
+
+.favorites__route {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* A saved route is not one of the "nothing due" chips, so it keeps full weight. */
+.favorites__route .route-chip {
+  opacity: 1;
+}
+
+.notice--hint {
+  font-size: 13px;
+  color: var(--text-faint);
+}
+
+/* The stop screen's star sits against the header's right edge, level with the
+   stop name rather than the back button above it. */
+.sheet-header--with-back {
+  position: relative;
+}
+
+.sheet-header--with-back .fav-star {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+}
