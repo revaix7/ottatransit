@@ -26,7 +26,7 @@ export function routeForeground(background) {
   return luminance > 0.45 ? '#0b0d10' : '#ffffff'
 }
 
-/** GTFS route_type 0–2 are the rail modes; OC Transpo uses 2 for the O-Train. */
+/** GTFS route_type 0–2 are the rail modes; OC Transpo files the O-Train as 0. */
 export function isRail(routeType) {
   return routeType === 0 || routeType === 1 || routeType === 2
 }

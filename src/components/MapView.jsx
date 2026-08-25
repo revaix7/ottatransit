@@ -16,6 +16,8 @@ const DARK_STYLE = 'https://tiles.openfreemap.org/styles/dark'
 const STOPS_SOURCE = 'nearby-stops'
 const ROUTE_LINE_SOURCE = 'route-line'
 const ROUTE_STOPS_SOURCE = 'route-stops'
+const RAIL_LINE_SOURCE = 'rail-lines'
+const RAIL_STATION_SOURCE = 'rail-stations'
 const VEHICLES_SOURCE = 'vehicles'
 
 const EMPTY_COLLECTION = { type: 'FeatureCollection', features: [] }
@@ -30,10 +32,17 @@ const STALE_AFTER_S = 300
 // Long enough that a corrected report slides in rather than snapping, short
 // enough that the lag it introduces is a few metres.
 const SMOOTHING_TAU_MS = 1500
-// Dead reckoning stops growing after this long without a report. A bus that
-// braked or turned the moment after it reported would otherwise sail off down
-// the street it was last seen on.
-const MAX_PROJECTION_S = 90
+// Dead reckoning follows a dead-straight line, and a straight line stops
+// resembling a bus route within a block or two — so the distance it is allowed
+// to travel is bounded twice over.
+//
+// The projection decays toward an asymptote of speed x TAU instead of growing
+// with elapsed time, and is then hard-capped. Without these, a median report
+// (69s old, 11.6 m/s) was drawn 724m from where the bus actually was, the worst
+// offender 2.5km — which is how buses ended up mid-river, sailing straight on
+// where the road they were last seen on turns.
+const PROJECTION_TAU_S = 15
+const MAX_PROJECTION_M = 150
 // Below this the vehicle is treated as parked and drawn where it reported.
 const MIN_SPEED_MS = 0.5
 
@@ -49,6 +58,37 @@ function stopsToGeoJSON(stops) {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [stop.stop_lon, stop.stop_lat] },
       properties: { stop_id: stop.stop_id, stop_name: stop.stop_name },
+    })),
+  }
+}
+
+/** O-Train stations, carrying the lines that call there so a dot can be coloured. */
+function stationsToGeoJSON(stations) {
+  return {
+    type: 'FeatureCollection',
+    features: (stations ?? []).map((station) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [station.stop_lon, station.stop_lat] },
+      properties: {
+        stop_id: station.stop_id,
+        stop_name: station.stop_name,
+        color: routeBackground(station.color),
+        label: station.name,
+      },
+    })),
+  }
+}
+
+/** Rail LineStrings recoloured from bare GTFS hex to something MapLibre accepts. */
+function railLinesToGeoJSON(lines) {
+  return {
+    type: 'FeatureCollection',
+    features: (lines?.features ?? []).map((feature) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        color: routeBackground(feature.properties?.route_color),
+      },
     })),
   }
 }
@@ -94,12 +134,15 @@ function projectPosition(vehicle, nowSeconds) {
   if (!Number.isFinite(speed) || speed < MIN_SPEED_MS) return reported
   if (!Number.isFinite(bearing) || !Number.isFinite(timestamp)) return reported
 
-  const elapsed = Math.min(Math.max(nowSeconds - timestamp, 0), MAX_PROJECTION_S)
+  const elapsed = Math.max(nowSeconds - timestamp, 0)
   if (elapsed === 0) return reported
 
-  // Equirectangular is exact to within centimetres over the couple of kilometres
-  // this ever projects, and costs a fraction of a great-circle step per frame.
-  const distance = speed * elapsed
+  // Equirectangular is exact to within centimetres over the couple of hundred
+  // metres this projects, and costs a fraction of a great-circle step per frame.
+  const distance = Math.min(
+    speed * PROJECTION_TAU_S * (1 - Math.exp(-elapsed / PROJECTION_TAU_S)),
+    MAX_PROJECTION_M,
+  )
   const radians = (bearing * Math.PI) / 180
   const dLat = (distance * Math.cos(radians)) / M_PER_DEG_LAT
   const dLon =
@@ -140,8 +183,11 @@ function boundsOf(featureCollection) {
 export default function MapView({
   center,
   stops,
+  areaStops,
+  rail,
   selectedStopId,
   onSelectStop,
+  onBoundsChange,
   vehicles,
   routeShapes,
   routeStops,
@@ -160,6 +206,8 @@ export default function MapView({
   onSelectStopRef.current = onSelectStop
   const onSelectRouteRef = useRef(onSelectRoute)
   onSelectRouteRef.current = onSelectRoute
+  const onBoundsChangeRef = useRef(onBoundsChange)
+  onBoundsChangeRef.current = onBoundsChange
 
   // The animation runs outside React: the latest fetch, and where each vehicle
   // is currently drawn.
@@ -168,7 +216,15 @@ export default function MapView({
 
   // Props the load handler needs to replay once the style is ready.
   const pendingRef = useRef({})
-  pendingRef.current = { stops, routeShapes, routeStops, routeColor, selectedStopId }
+  pendingRef.current = {
+    stops,
+    areaStops,
+    rail,
+    routeShapes,
+    routeStops,
+    routeColor,
+    selectedStopId,
+  }
 
   useEffect(() => {
     const map = new MapLibreMap({
@@ -193,8 +249,33 @@ export default function MapView({
     })
 
     map.on('load', () => {
-      // Layers are added bottom-up: the route line sits under the stops, and
-      // the live fleet sits above everything.
+      // Layers are added bottom-up: rail sits under the selected route, which
+      // sits under the stops, and the live fleet sits above everything.
+      map.addSource(RAIL_LINE_SOURCE, { type: 'geojson', data: EMPTY_COLLECTION })
+
+      map.addLayer({
+        id: 'rail-line-casing',
+        type: 'line',
+        source: RAIL_LINE_SOURCE,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#0b0d10',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 4, 16, 11],
+          'line-opacity': 0.9,
+        },
+      })
+
+      map.addLayer({
+        id: 'rail-line',
+        type: 'line',
+        source: RAIL_LINE_SOURCE,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2, 16, 6],
+        },
+      })
+
       map.addSource(ROUTE_LINE_SOURCE, { type: 'geojson', data: EMPTY_COLLECTION })
 
       // A dark casing under the coloured line keeps it legible where it crosses
@@ -264,6 +345,42 @@ export default function MapView({
         },
       })
 
+      map.addSource(RAIL_STATION_SOURCE, { type: 'geojson', data: EMPTY_COLLECTION })
+
+      // Stations read as stations rather than as another bus stop: bigger, in
+      // the line colour, with a white core.
+      map.addLayer({
+        id: 'rail-station-circle',
+        type: 'circle',
+        source: RAIL_STATION_SOURCE,
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 3.5, 14, 6, 16, 8],
+          'circle-color': '#ffffff',
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 9, 1.5, 16, 3.5],
+          'circle-stroke-color': ['get', 'color'],
+        },
+      })
+
+      map.addLayer({
+        id: 'rail-station-label',
+        type: 'symbol',
+        source: RAIL_STATION_SOURCE,
+        minzoom: 12,
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': ['Noto Sans Bold'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 12, 10, 16, 13],
+          'text-offset': [0, 1.1],
+          'text-anchor': 'top',
+          'text-optional': true,
+        },
+        paint: {
+          'text-color': '#e8ecf2',
+          'text-halo-color': '#0b0d10',
+          'text-halo-width': 1.5,
+        },
+      })
+
       map.addSource(VEHICLES_SOURCE, { type: 'geojson', data: EMPTY_COLLECTION })
 
       map.addLayer({
@@ -311,7 +428,12 @@ export default function MapView({
         if (routeId) onSelectRouteRef.current?.(routeId)
       })
 
-      for (const layer of ['stops-circle', 'vehicles-circle']) {
+      map.on('click', 'rail-station-circle', (event) => {
+        const feature = event.features?.[0]
+        if (feature) onSelectStopRef.current?.(feature.properties.stop_id)
+      })
+
+      for (const layer of ['stops-circle', 'vehicles-circle', 'rail-station-circle']) {
         map.on('mouseenter', layer, () => {
           map.getCanvas().style.cursor = 'pointer'
         })
@@ -320,11 +442,29 @@ export default function MapView({
         })
       }
 
+      // Which stops to fetch depends on where the map is looking, so every
+      // settled move reports the viewport back up. moveend covers panning,
+      // zooming and the programmatic easeTo/fitBounds calls below alike.
+      const reportBounds = () => {
+        const bounds = map.getBounds()
+        onBoundsChangeRef.current?.({
+          south: bounds.getSouth(),
+          west: bounds.getWest(),
+          north: bounds.getNorth(),
+          east: bounds.getEast(),
+          zoom: map.getZoom(),
+        })
+      }
+      map.on('moveend', reportBounds)
+      reportBounds()
+
       loadedRef.current = true
 
       // Anything that arrived while the style was loading.
       const pending = pendingRef.current
-      map.getSource(STOPS_SOURCE).setData(stopsToGeoJSON(pending.stops))
+      map.getSource(RAIL_LINE_SOURCE).setData(railLinesToGeoJSON(pending.rail?.lines))
+      map.getSource(RAIL_STATION_SOURCE).setData(stationsToGeoJSON(pending.rail?.stations))
+      map.getSource(STOPS_SOURCE).setData(stopsToGeoJSON(pending.areaStops ?? pending.stops))
       map.getSource(ROUTE_STOPS_SOURCE).setData(stopsToGeoJSON(pending.routeStops))
       map.getSource(ROUTE_LINE_SOURCE).setData(pending.routeShapes ?? EMPTY_COLLECTION)
       if (pending.routeColor) {
@@ -351,12 +491,22 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Nearby stops changed.
+  // The stops layer draws everything in the viewport once the map is zoomed in
+  // far enough to fetch them, and falls back to the nearby list — which is only
+  // ever the 25 closest — when it is zoomed out past that.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !loadedRef.current) return
-    map.getSource(STOPS_SOURCE)?.setData(stopsToGeoJSON(stops))
-  }, [stops])
+    map.getSource(STOPS_SOURCE)?.setData(stopsToGeoJSON(areaStops ?? stops))
+  }, [areaStops, stops])
+
+  // The rail network is static, so this runs once whenever the fetch lands.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !loadedRef.current) return
+    map.getSource(RAIL_LINE_SOURCE)?.setData(railLinesToGeoJSON(rail?.lines))
+    map.getSource(RAIL_STATION_SOURCE)?.setData(stationsToGeoJSON(rail?.stations))
+  }, [rail])
 
   // Selection changed — highlight it and bring it into the visible top half of
   // the screen, since the bottom sheet covers the rest.
@@ -366,7 +516,12 @@ export default function MapView({
 
     map.setFilter('stops-selected', ['==', ['get', 'stop_id'], selectedStopId ?? '__none__'])
 
-    const stop = stops?.find((candidate) => candidate.stop_id === selectedStopId)
+    // The selection can come from the sheet (nearby), from a dot anywhere on
+    // screen, or from a station, so all three are searched for its coordinates.
+    const stop =
+      stops?.find((candidate) => candidate.stop_id === selectedStopId) ??
+      areaStops?.find((candidate) => candidate.stop_id === selectedStopId) ??
+      rail?.stations?.find((station) => station.stop_id === selectedStopId)
     if (stop) {
       map.easeTo({
         center: [stop.stop_lon, stop.stop_lat],
@@ -375,7 +530,7 @@ export default function MapView({
         duration: 500,
       })
     }
-  }, [selectedStopId, stops])
+  }, [selectedStopId, stops, areaStops, rail])
 
   // The selected route's line and the stops it calls at. Nearby stops fade back
   // while a route is up so the route's own stops are the ones that read.

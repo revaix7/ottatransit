@@ -6,6 +6,7 @@ import StopView from './components/StopView.jsx'
 import RouteBanner from './components/RouteBanner.jsx'
 import { useGeolocation } from './hooks/useGeolocation.js'
 import { useNearby } from './hooks/useNearby.js'
+import { useStopsInBounds, useRail } from './hooks/useMapStops.js'
 import { useArrivalsForStops } from './hooks/useArrivals.js'
 import { useVehicles } from './hooks/useVehicles.js'
 import { useRouteShapes, useRouteStops } from './hooks/useRouteDetails.js'
@@ -27,6 +28,9 @@ export default function App() {
   // line have a name and colour without waiting on another request.
   const [selectedRoute, setSelectedRoute] = useState(null)
   const [sheetHeight, setSheetHeight] = useState(0)
+  // Where the map is looking, so the stops drawn on it follow the user around
+  // instead of staying pinned to wherever they happened to open the app.
+  const [viewport, setViewport] = useState(null)
 
   const { data: stops, isLoading, error } = useNearby(location.lat, location.lon, NEARBY_RADIUS_M)
 
@@ -35,6 +39,9 @@ export default function App() {
     [stops],
   )
   const { byStop } = useArrivalsForStops(countdownStopIds)
+
+  const { data: areaStops } = useStopsInBounds(viewport)
+  const { data: rail } = useRail()
 
   const { data: allVehicles } = useVehicles()
   const routeId = selectedRoute?.routeId ?? null
@@ -66,8 +73,11 @@ export default function App() {
       <MapView
         center={location}
         stops={stops}
+        areaStops={areaStops}
+        rail={rail}
         selectedStopId={selectedStopId}
         onSelectStop={setSelectedStopId}
+        onBoundsChange={setViewport}
         vehicles={vehicles}
         routeShapes={routeId ? routeShapes : null}
         routeStops={routeId ? routeStops : null}

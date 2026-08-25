@@ -1,4 +1,5 @@
-// Vite proxies /api to the Express server on port 3000 in dev.
+// Vite proxies /api to the Express server in dev; the port comes from
+// server/.env, which vite.config.js reads so the two cannot drift apart.
 
 export async function fetchJson(url, { signal } = {}) {
   const response = await fetch(url, { signal })
@@ -10,10 +11,11 @@ export async function fetchJson(url, { signal } = {}) {
 }
 
 /**
- * GPS drifts by a few metres constantly. Rounding the coordinates that go into
- * the query key stops every jitter from invalidating the nearby-stops cache;
- * 4 decimal places is roughly 11 m.
+ * GPS drifts by a few metres constantly, and so does a map under a finger.
+ * Rounding the coordinates that go into a query key stops every jitter from
+ * invalidating the cached response. The default of 10,000 is 4 decimal places,
+ * roughly 11 m — right for a GPS fix; viewport boxes pass something coarser.
  */
-export function roundCoord(value) {
-  return Math.round(value * 10_000) / 10_000
+export function roundCoord(value, scale = 10_000) {
+  return Math.round(value * scale) / scale
 }

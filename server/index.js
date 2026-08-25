@@ -5,6 +5,8 @@ import {
   hasRealtimeKey,
   getAllRoutes,
   getNearbyStops,
+  getStopsInBounds,
+  getRailNetwork,
   getRouteShapes,
   getRouteStops,
   getStopById,
@@ -38,6 +40,29 @@ app.get('/api/stops/nearby', (req, res) => {
   }
   const radius = Number(req.query.radius) || 800
   res.json(getNearbyStops(lat, lon, radius))
+})
+
+// Everything the map is currently looking at. The nearby endpoint above backs
+// the list in the sheet and is deliberately capped at 25; the map needs whatever
+// is on screen, however far that is from the user.
+app.get('/api/stops/in-bounds', (req, res) => {
+  const bounds = {
+    south: Number(req.query.south),
+    west: Number(req.query.west),
+    north: Number(req.query.north),
+    east: Number(req.query.east),
+  }
+  if (!Object.values(bounds).every(Number.isFinite)) {
+    return res.status(400).json({ error: 'south, west, north and east are required numbers' })
+  }
+  res.json(getStopsInBounds(bounds))
+})
+
+// The O-Train lines and stations, from the static feed. Kept separate from
+// /api/shapes/:routeId because rail is drawn permanently rather than only while
+// its route is selected.
+app.get('/api/rail', (req, res) => {
+  res.json(getRailNetwork())
 })
 
 app.get('/api/stops/:id/arrivals', (req, res) => {

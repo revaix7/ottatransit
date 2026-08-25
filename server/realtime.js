@@ -18,6 +18,19 @@ let lastError = null
 let vehicleSnapshot = []
 let predictionIndex = new Map()
 
+/**
+ * VehiclePositions identifies a trip but not its route, so the route has to be
+ * looked up. The obvious join — vehicle_positions to the static trips table —
+ * only resolves about a quarter of the fleet: OC Transpo's realtime trip ids
+ * are assigned per service day and most of them are not in the published static
+ * feed at all.
+ *
+ * TripUpdates, though, carries route_id in the trip descriptor for the same
+ * trips. Falling back to it lifts coverage from roughly 70 vehicles to 210 of
+ * the ~265 that report a trip. (The remaining ~120 vehicles report no trip
+ * whatsoever — those are deadheading or sitting at a garage, and genuinely have
+ * no route.)
+ */
 function readVehicles() {
   const db = requireDb()
   return db
@@ -29,14 +42,15 @@ function readVehicles() {
               vp.bearing,
               vp.speed,
               vp.timestamp,
-              t.route_id,
+              COALESCE(t.route_id, tu.route_id) AS route_id,
               t.trip_headsign,
-              t.direction_id,
+              COALESCE(t.direction_id, tu.direction_id) AS direction_id,
               r.route_short_name,
               r.route_color
          FROM vehicle_positions vp
-         LEFT JOIN trips  t ON t.trip_id  = vp.trip_id
-         LEFT JOIN routes r ON r.route_id = t.route_id
+         LEFT JOIN trips t ON t.trip_id = vp.trip_id
+         LEFT JOIN trip_updates tu ON tu.trip_id = vp.trip_id
+         LEFT JOIN routes r ON r.route_id = COALESCE(t.route_id, tu.route_id)
         WHERE vp.latitude IS NOT NULL
           AND vp.longitude IS NOT NULL`,
     )
@@ -45,7 +59,7 @@ function readVehicles() {
       id: row.vehicle_id,
       tripId: row.trip_id,
       routeId: row.route_id,
-      routeShortName: row.route_short_name,
+      routeShortName: row.route_short_name ?? row.route_id,
       routeColor: row.route_color,
       headsign: row.trip_headsign,
       directionId: row.direction_id,

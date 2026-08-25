@@ -146,6 +146,113 @@ export function getNearbyStops(lat, lon, radiusMeters = 800, limit = 25) {
   }))
 }
 
+/**
+ * Stops inside a lat/lon box, for drawing whatever the map is currently looking
+ * at. Unlike getNearbyStops this skips the per-stop route lookup — the map only
+ * needs a dot and a name, and running that query across a few thousand stops
+ * would dominate the response.
+ */
+export function getStopsInBounds({ south, west, north, east }, limit = 1200) {
+  return requireDb()
+    .prepare(
+      `SELECT stop_id, stop_code, stop_name, stop_lat, stop_lon
+         FROM stops
+        WHERE stop_lat BETWEEN ? AND ?
+          AND stop_lon BETWEEN ? AND ?
+        LIMIT ?`,
+    )
+    .all(south, north, west, east, limit)
+}
+
+/**
+ * The rail network as GeoJSON: one LineString collection for the O-Train lines
+ * and a point per station.
+ *
+ * The train is drawn from the static feed and always on, rather than appearing
+ * only when a route is selected. OC Transpo publishes no realtime data for the
+ * O-Train — neither VehiclePositions nor TripUpdates carry a single rail trip —
+ * so the schedule is the only thing that can put it on the map.
+ *
+ * Every input is static, so the result is built once and reused.
+ */
+let railNetwork
+
+export function getRailNetwork() {
+  if (railNetwork) return railNetwork
+  const database = requireDb()
+
+  const routes = getRoutes(
+    { route_type: 0 },
+    ['route_id', 'route_short_name', 'route_long_name', 'route_color'],
+    [['route_short_name', 'ASC']],
+    { db: database },
+  )
+
+  const lines = { type: 'FeatureCollection', features: [] }
+  for (const route of routes) {
+    const shapes = getShapesAsGeoJSON({ route_id: route.route_id }, { db: database })
+    for (const feature of shapes.features ?? []) {
+      lines.features.push({
+        ...feature,
+        properties: {
+          ...feature.properties,
+          route_id: route.route_id,
+          route_short_name: route.route_short_name,
+          route_color: route.route_color,
+        },
+      })
+    }
+  }
+
+  // Each station appears in the feed once per platform — "BLAIR O-TRAIN WEST /
+  // OUEST" and "BLAIR O-TRAIN EAST / EST" are the same place. Drawing both puts
+  // a pair of dots on top of each other at every stop on the line, so they are
+  // collapsed on the name that precedes " O-TRAIN" and the platforms averaged
+  // into one point.
+  const stations = new Map()
+  for (const route of routes) {
+    for (const stop of getRouteStops(route.route_id)) {
+      const name = stop.stop_name.split(/\s+O-TRAIN\b/)[0].trim()
+      const existing = stations.get(name)
+      if (existing) {
+        existing.platforms.push(stop)
+        if (!existing.lines.includes(route.route_short_name)) {
+          existing.lines.push(route.route_short_name)
+        }
+      } else {
+        stations.set(name, {
+          name,
+          platforms: [stop],
+          lines: [route.route_short_name],
+          // The first line to reach a station gives it its colour; routes are
+          // ordered by number, so a Line 1 interchange reads as Line 1.
+          color: route.route_color,
+        })
+      }
+    }
+  }
+
+  railNetwork = {
+    routes,
+    lines,
+    stations: [...stations.values()].map((station) => ({
+      name: station.name,
+      lines: station.lines,
+      color: station.color,
+      // Opening a station opens one platform's departures; the first is as good
+      // a choice as any, and its own name says which direction it serves.
+      stop_id: station.platforms[0].stop_id,
+      stop_name: station.platforms[0].stop_name,
+      platform_ids: station.platforms.map((platform) => platform.stop_id),
+      stop_lat: average(station.platforms.map((platform) => platform.stop_lat)),
+      stop_lon: average(station.platforms.map((platform) => platform.stop_lon)),
+    })),
+  }
+  return railNetwork
+}
+
+const average = (values) => values.reduce((sum, value) => sum + value, 0) / values.length
+
 /** GeoJSON LineStrings for every shape the route uses. */
 export function getRouteShapes(routeId) {
   const database = requireDb()
