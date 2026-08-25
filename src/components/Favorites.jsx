@@ -3,7 +3,7 @@ import StopCard from './StopCard.jsx'
 import RoutePill from './RoutePill.jsx'
 import FavoriteStar from './FavoriteStar.jsx'
 import EmptyState from './EmptyState.jsx'
-import { SkeletonStopCard } from './Skeleton.jsx'
+import { SkeletonBar, SkeletonStopCard } from './Skeleton.jsx'
 import { useFavorites } from '../store/favorites.js'
 import { useArrivalsForStops } from '../hooks/useArrivals.js'
 import { useRoutes } from '../hooks/useRouteDetails.js'
@@ -37,9 +37,9 @@ export default function Favorites({ now, onSelectStop, onSelectRoute, selectedRo
     <section className="favorites">
       <header className="sheet-header">
         <h1 className="sheet-header__title">Favourites</h1>
-        <p className="sheet-header__subtitle">
-          {isEmpty ? 'Nothing saved yet' : 'Saved stops and routes'}
-        </p>
+        {/* When empty the EmptyState below says so at length; a subtitle here
+            too would just print the same sentence twice. */}
+        {!isEmpty && <p className="sheet-header__subtitle">Saved stops and routes</p>}
       </header>
 
       {isEmpty && (
@@ -48,6 +48,17 @@ export default function Favorites({ now, onSelectStop, onSelectRoute, selectedRo
           title="Nothing saved yet"
           detail="Tap the star on a stop below, or on a route once it's open on the map, to keep it here."
         />
+      )}
+
+      {/* Saved ids hydrate from localStorage instantly but the route list they
+          resolve against is a fetch, so without this the section would render a
+          header over nothing for as long as that takes. */}
+      {routeIds.length > 0 && routes.length === 0 && (
+        <div className="favorites__routes" aria-busy="true">
+          {routeIds.map((routeId) => (
+            <SkeletonBar key={routeId} width="38px" height={22} />
+          ))}
+        </div>
       )}
 
       {routes.length > 0 && (
